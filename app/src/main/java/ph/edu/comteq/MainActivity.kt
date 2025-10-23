@@ -80,16 +80,16 @@ fun NoteListScreen(viewModel: NoteViewModel, modifier: Modifier = Modifier) {
 
     LazyColumn(modifier = modifier) {
         items(notes) { note ->
-            Text(text = note.title)
+            NoteCard(note)
         }
     }
 }
 
 @Composable
-fun NoteCard(note: Note, modifier: Modifier){
+fun NoteCard(note: Note, modifier: Modifier = Modifier ){
     Card(
         modifier = Modifier.fillMaxWidth().padding(8.dp),
-        elevation = CardDefaults.cardElevation(2.dp)
+        elevation = CardDefaults.cardElevation(4.dp)
     ) {
         Column(
             modifier = Modifier.padding(16.dp)
