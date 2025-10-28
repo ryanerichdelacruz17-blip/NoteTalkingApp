@@ -34,9 +34,49 @@ private val noteDao: NoteDao = AppDatabase.getDatabase(application).noteDao()
 
     fun insert(note: Note) = viewModelScope.launch{ noteDao. insertNote (note)
     }
+
     fun update(note: Note) = viewModelScope.launch { noteDao.updateNote (note)
     }
+
     fun delete(note: Note) = viewModelScope.launch {
         noteDao.deleteNote (note)
+    }
+
+    // NEW: All notes WITH their tags
+    val allNotesWithTags: Flow<List<NoteWithTags>> = noteDao.getAllNotesWithTags()
+
+    suspend fun getNoteById(id: Int): Note? {
+        return noteDao.getNoteById(id)
+    }
+
+    suspend fun getNoteWithTags(noteId: Int): NoteWithTags? {
+        return noteDao.getNoteWithTags(noteId)
+    }
+
+    fun insertTag(tag: Tag) = viewModelScope.launch {
+        noteDao.insertTag(tag)
+    }
+
+    fun updateTag(tag: Tag) = viewModelScope.launch {
+        noteDao.updateTag(tag)
+    }
+
+    fun deleteTag(tag: Tag) = viewModelScope.launch {
+        noteDao.deleteTag(tag)
+    }
+
+    // Add a tag to a note
+    fun addTagToNote(noteId: Int, tagId: Int) = viewModelScope.launch {
+        noteDao.insertNoteTagCrossRef(NoteTagCrossRef(noteId, tagId))
+    }
+
+    // Remove a tag from a note
+    fun removeTagFromNote(noteId: Int, tagId: Int) = viewModelScope.launch {
+        noteDao.deleteNoteTagCrossRef(NoteTagCrossRef(noteId, tagId))
+    }
+
+    // Get all notes that have a specific tag
+    fun getNotesWithTag(tagId: Int): Flow<List<Note>> {
+        return noteDao.getNotesWithTag(tagId)
     }
 }
