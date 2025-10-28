@@ -28,6 +28,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SearchBar
 import androidx.compose.material3.SearchBarDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -177,17 +178,17 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun NoteListScreen(viewModel: NoteViewModel, modifier: Modifier = Modifier) {
     //  get all notes from viewmodel
-    val notes by viewModel.allNotes.collectAsState(initial = emptyList())
+    val notesWithTags by viewModel.allNotesWithTags.collectAsState(initial = emptyList())
 
     LazyColumn(modifier = modifier) {
-        items(notes) { note ->
-            NoteCard(note)
+        items(notesWithTags) { note ->
+            NoteCard(note = note.note, tags = note.tags)
         }
     }
 }
 
 @Composable
-fun NoteCard(note: Note, modifier: Modifier = Modifier ){
+fun NoteCard(note: Note, modifier: Modifier = Modifier, tags: List<Tag> = emptyList() ){
     Card(
         modifier = Modifier.fillMaxWidth().padding(8.dp),
         elevation = CardDefaults.cardElevation(4.dp)
@@ -200,6 +201,20 @@ fun NoteCard(note: Note, modifier: Modifier = Modifier ){
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
+            // NEW: Show category if it exists
+            if (note.category.isNotEmpty()) {
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = MaterialTheme.shapes.small
+                ) {
+                    Text(
+                        text = note.category,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+            }
             Text(
                 text = note.title,
                 fontSize = 20.sp,
