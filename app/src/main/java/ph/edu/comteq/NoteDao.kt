@@ -75,5 +75,32 @@ interface NoteDao {
         ORDER BY updated_at DESC
     """)
     fun getNotesWithTag(tagId: Int): Flow<List<Note>>
-}
 
+    @Query("SELECT * FROM tags WHERE name = :name LIMIT 1")
+    suspend fun getTagByName(name: String): Tag?
+
+
+    /**
+     * Performs a transaction to insert a Note with its associated Tags.
+     */
+    @Transaction
+    suspend fun insertNoteWithTags(note: Note, tags: List<Tag>) {
+        // 1. Insert the note and get its new ID.
+        val noteId = insertNote(note)
+
+        // 2. For each tag, ensure it exists and then create a cross-reference.
+        for (tag in tags) {
+            // Check if the tag already exists to avoid duplicates.
+            var existingTag = getTagByName(tag.name)
+            if (existingTag == null) {
+                // If not, insert it and get the new ID.
+                val newTagId = insertTag(tag)
+                existingTag = tag.copy(id = newTagId.toInt())
+            }
+
+
+            val crossRef = NoteTagCrossRef(noteId = noteId.toInt(), tagId = existingTag.id)
+            insertNoteTagCrossRef(crossRef)
+        }
+    }
+}

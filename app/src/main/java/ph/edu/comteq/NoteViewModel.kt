@@ -11,17 +11,17 @@ import kotlinx.coroutines.launch
 
 class NoteViewModel(application: Application): AndroidViewModel(application) { // Get an instance of the database and then the DAO from it.
 
-private val noteDao: NoteDao = AppDatabase.getDatabase(application).noteDao()
+    private val noteDao: NoteDao = AppDatabase.getDatabase(application).noteDao()
 
     // Track what the user is searching for
     private val _searchQuery = MutableStateFlow("")
 
     val allNotes: Flow<List<Note>> = _searchQuery.flatMapLatest { query ->
-    if (query.isBlank()) {
-        noteDao.getALlNotes()  // Show everything
-    } else {
-        noteDao.searchNotes(query)
-    }
+        if (query.isBlank()) {
+            noteDao.getALlNotes()  // Show everything
+        } else {
+            noteDao.searchNotes(query)
+        }
     }
     // Call this when user types in search box
     fun updateSearchQuery(query: String) {
@@ -78,5 +78,12 @@ private val noteDao: NoteDao = AppDatabase.getDatabase(application).noteDao()
     // Get all notes that have a specific tag
     fun getNotesWithTag(tagId: Int): Flow<List<Note>> {
         return noteDao.getNotesWithTag(tagId)
+    }
+
+    /**
+     * Calls the DAO transaction to insert a note along with its list of tags.
+     */
+    fun insertNoteWithTags(note: Note, tags: List<Tag>) = viewModelScope.launch {
+        noteDao.insertNoteWithTags(note, tags)
     }
 }
