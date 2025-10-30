@@ -35,8 +35,7 @@ class NoteViewModel(application: Application): AndroidViewModel(application) { /
     fun insert(note: Note) = viewModelScope.launch{ noteDao. insertNote (note)
     }
 
-    fun update(note: Note) = viewModelScope.launch { noteDao.updateNote (note)
-    }
+    fun update(note: Note) = viewModelScope.launch { noteDao.updateNote(note) }
 
     fun delete(note: Note) = viewModelScope.launch {
         noteDao.deleteNote (note)
@@ -80,10 +79,14 @@ class NoteViewModel(application: Application): AndroidViewModel(application) { /
         return noteDao.getNotesWithTag(tagId)
     }
 
-    /**
-     * Calls the DAO transaction to insert a note along with its list of tags.
-     */
+    val allTags: Flow<List<Tag>> = noteDao.getAllTags()
+
     fun insertNoteWithTags(note: Note, tags: List<Tag>) = viewModelScope.launch {
         noteDao.insertNoteWithTags(note, tags)
     }
+    suspend fun insertNoteWithTagsSuspend(note: Note, tags: List<Tag>) {
+        noteDao.insertNoteWithTags(note, tags)
+    }
+
+
 }

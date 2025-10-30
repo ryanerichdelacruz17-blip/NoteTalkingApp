@@ -30,6 +30,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import ph.edu.comteq.ui.theme.NoteTalkingAppTheme
 
+import kotlinx.coroutines.launch
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 class MainActivity : ComponentActivity() {
     private val viewModel: NoteViewModel by viewModels()
@@ -80,6 +82,14 @@ fun NotesListScreenWithSearch(
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
     val notesWithTags by viewModel.allNotesWithTags.collectAsState(initial = emptyList())
+    // For search: filter list if needed
+    val filteredNotesWithTags = if (isSearchActive && searchQuery.isNotBlank()) {
+        notesWithTags.filter { nwt ->
+            nwt.note.title.contains(searchQuery, ignoreCase = true) ||
+            nwt.note.content.contains(searchQuery, ignoreCase = true) ||
+            nwt.tags.any { it.name.contains(searchQuery, ignoreCase = true) }
+        }
+    } else notesWithTags
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
@@ -131,7 +141,7 @@ fun NotesListScreenWithSearch(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(16.dp)
                     ) {
-                        if (notesWithTags.isEmpty()) {
+                        if (filteredNotesWithTags.isEmpty()) {
                             item {
                                 Text(
                                     text = "No notes found",
@@ -141,7 +151,7 @@ fun NotesListScreenWithSearch(
                                 )
                             }
                         } else {
-                            items(notesWithTags) { noteWithTags ->
+                            items(filteredNotesWithTags) { noteWithTags ->
                                 NoteCard(
                                     note = noteWithTags.note,
                                     tags = noteWithTags.tags,
@@ -169,7 +179,7 @@ fun NotesListScreenWithSearch(
         }
     ) { innerPadding ->
         NotesListScreen(
-            notes = notesWithTags,
+            notes = filteredNotesWithTags, // pass filtered list!
             modifier = Modifier.padding(innerPadding),
             onEditNote = onEditNote
         )
@@ -189,18 +199,141 @@ fun NotesListScreen(
     }
 }
 
-// Simple NoteEditScreen stub for navigation to work
+// REPLACE/EXTEND NoteEditScreen AS BELOW
 @Composable
 fun NoteEditScreen(
     noteId: Int?,
     viewModel: NoteViewModel,
     onNavigateBack: () -> Unit
 ) {
-    // TODO: Implement edit/add note UI
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = if (noteId == null) "Add Note" else "Edit Note")
-        Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = onNavigateBack) { Text("Back") }
+    val inEditMode = noteId != null
+    val scope = rememberCoroutineScope()
+    // State for form
+    var title by remember { mutableStateOf("") }
+    var content by remember { mutableStateOf("") }
+    var category by remember { mutableStateOf("") }
+    var newTagName by remember { mutableStateOf("") }
+    var showTagInput by remember { mutableStateOf(false) }
+    var showCategoryInput by remember { mutableStateOf(false) }
+
+    // Existing tags
+    val allTags by viewModel.allTags.collectAsState(initial = emptyList())
+    val selectedTags = remember { mutableStateListOf<Tag>() }
+    // For note edit: load note and tags
+    LaunchedEffect(noteId) {
+        if(inEditMode && noteId != null) {
+            val noteWithTags = viewModel.getNoteWithTags(noteId)
+            noteWithTags?.let {
+                title = it.note.title
+                content = it.note.content
+                category = it.note.category
+                selectedTags.clear()
+                selectedTags.addAll(it.tags)
+            }
+        } else {
+            // Add mode: reset fields
+            title = ""
+            content = ""
+            category = ""
+            selectedTags.clear()
+        }
+    }
+    // UI
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(if (inEditMode) "Edit Note" else "Add Note", style = MaterialTheme.typography.titleLarge)
+        OutlinedTextField(
+            value = title,
+            onValueChange = { title = it },
+            label = { Text("Title") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        OutlinedTextField(
+            value = content,
+            onValueChange = { content = it },
+            label = { Text("Content") },
+            modifier = Modifier.fillMaxWidth().height(120.dp)
+        )
+        // Category input
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = category,
+                onValueChange = { category = it },
+                label = { Text("Category") },
+                singleLine = true,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        // Tag chips + add
+        Text("Tags", style = MaterialTheme.typography.labelLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            allTags.forEach { tag ->
+                val selected = selectedTags.any { it.id == tag.id }
+                FilterChip(
+                    selected = selected,
+                    onClick = {
+                        if(selected) selectedTags.removeAll { it.id == tag.id } else selectedTags.add(tag)
+                    },
+                    label = { Text(tag.name) },
+                    modifier = Modifier.padding(end = 4.dp)
+                )
+            }
+            // Add tag button
+            AssistChip(onClick = { showTagInput = true }, label = { Text("+ New Tag") })
+        }
+        if(showTagInput) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = newTagName,
+                    onValueChange = { newTagName = it },
+                    label = { Text("New Tag Name") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(Modifier.width(8.dp))
+                Button(onClick = {
+                    if(newTagName.isNotBlank()) {
+                        scope.launch {
+                            viewModel.insertTag(Tag(name = newTagName.trim()))
+                            newTagName = ""
+                            showTagInput = false
+                        }
+                    }
+                }) {
+                    Text("Add")
+                }
+                Spacer(Modifier.width(4.dp))
+                TextButton({ showTagInput = false }) { Text("Cancel") }
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        // Save
+        Button(
+            onClick = {
+                scope.launch {
+                    val note = Note(
+                        id = noteId ?: 0,
+                        title = title,
+                        content = content,
+                        category = category
+                    )
+                    if (inEditMode) viewModel.update(note)
+                    else viewModel.insertNoteWithTagsSuspend(note, selectedTags)
+                    onNavigateBack()
+                }
+            },
+            enabled = title.isNotBlank() && content.isNotBlank()
+        ) {
+            Text("Save")
+        }
+        if(inEditMode) {
+            OutlinedButton(onClick = onNavigateBack, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
+        }
     }
 }
 
