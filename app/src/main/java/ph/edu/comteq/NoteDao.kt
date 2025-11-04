@@ -95,5 +95,12 @@ interface NoteDao {
             insertNoteTagCrossRef(crossRef)
         }
     }
+    @Transaction
+    @Query("SELECT * FROM notes WHERE id = :noteId LIMIT 1")
+    fun getNoteWithTagsById(noteId: Int): Flow<NoteWithTags?>
+
+    @Query("DELETE FROM note_tag_cross_ref WHERE note_id = :noteId")
+    suspend fun clearTagsForNote(noteId: Int)
+
 
 }

@@ -1,5 +1,6 @@
 package ph.edu.comteq
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -20,6 +21,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -28,6 +31,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import kotlinx.coroutines.flow.MutableStateFlow
 import ph.edu.comteq.ui.theme.NoteTalkingAppTheme
 
 import kotlinx.coroutines.launch
@@ -199,7 +203,6 @@ fun NotesListScreen(
     }
 }
 
-// REPLACE/EXTEND NoteEditScreen AS BELOW
 @Composable
 fun NoteEditScreen(
     noteId: Int?,
@@ -208,37 +211,33 @@ fun NoteEditScreen(
 ) {
     val inEditMode = noteId != null
     val scope = rememberCoroutineScope()
-    // State for form
+
     var title by remember { mutableStateOf("") }
     var content by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("") }
     var newTagName by remember { mutableStateOf("") }
     var showTagInput by remember { mutableStateOf(false) }
-    var showCategoryInput by remember { mutableStateOf(false) }
 
-    // Existing tags
     val allTags by viewModel.allTags.collectAsState(initial = emptyList())
     val selectedTags = remember { mutableStateListOf<Tag>() }
-    // For note edit: load note and tags
-    LaunchedEffect(noteId) {
-        if(inEditMode && noteId != null) {
-            val noteWithTags = viewModel.getNoteWithTags(noteId)
-            noteWithTags?.let {
-                title = it.note.title
-                content = it.note.content
-                category = it.note.category
-                selectedTags.clear()
-                selectedTags.addAll(it.tags)
-            }
-        } else {
-            // Add mode: reset fields
-            title = ""
-            content = ""
-            category = ""
+
+    //  Collect the note + tags Flow safely
+    val noteWithTags by remember(noteId) {
+        if (noteId != null) viewModel.getNoteWithTags(noteId)
+        else MutableStateFlow<NoteWithTags?>(null)
+    }.collectAsState(initial = null)
+
+    //  Populate UI fields once the note is loaded
+    LaunchedEffect(noteWithTags) {
+        noteWithTags?.let {
+            title = it.note.title
+            content = it.note.content
+            category = it.note.category
             selectedTags.clear()
+            selectedTags.addAll(it.tags)
         }
     }
-    // UI
+
     Column(
         Modifier
             .fillMaxSize()
@@ -246,6 +245,7 @@ fun NoteEditScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(if (inEditMode) "Edit Note" else "Add Note", style = MaterialTheme.typography.titleLarge)
+
         OutlinedTextField(
             value = title,
             onValueChange = { title = it },
@@ -253,23 +253,25 @@ fun NoteEditScreen(
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
+
         OutlinedTextField(
             value = content,
             onValueChange = { content = it },
             label = { Text("Content") },
-            modifier = Modifier.fillMaxWidth().height(120.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(120.dp)
         )
-        // Category input
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = category,
-                onValueChange = { category = it },
-                label = { Text("Category") },
-                singleLine = true,
-                modifier = Modifier.weight(1f)
-            )
-        }
-        // Tag chips + add
+
+        OutlinedTextField(
+            value = category,
+            onValueChange = { category = it },
+            label = { Text("Category") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        //  Tags
         Text("Tags", style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             allTags.forEach { tag ->
@@ -277,16 +279,17 @@ fun NoteEditScreen(
                 FilterChip(
                     selected = selected,
                     onClick = {
-                        if(selected) selectedTags.removeAll { it.id == tag.id } else selectedTags.add(tag)
+                        if (selected) selectedTags.removeAll { it.id == tag.id }
+                        else selectedTags.add(tag)
                     },
                     label = { Text(tag.name) },
                     modifier = Modifier.padding(end = 4.dp)
                 )
             }
-            // Add tag button
             AssistChip(onClick = { showTagInput = true }, label = { Text("+ New Tag") })
         }
-        if(showTagInput) {
+
+        if (showTagInput) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = newTagName,
@@ -297,7 +300,7 @@ fun NoteEditScreen(
                 )
                 Spacer(Modifier.width(8.dp))
                 Button(onClick = {
-                    if(newTagName.isNotBlank()) {
+                    if (newTagName.isNotBlank()) {
                         scope.launch {
                             viewModel.insertTag(Tag(name = newTagName.trim()))
                             newTagName = ""
@@ -308,11 +311,13 @@ fun NoteEditScreen(
                     Text("Add")
                 }
                 Spacer(Modifier.width(4.dp))
-                TextButton({ showTagInput = false }) { Text("Cancel") }
+                TextButton(onClick = { showTagInput = false }) { Text("Cancel") }
             }
         }
+
         Spacer(Modifier.height(16.dp))
-        // Save
+
+        // Save button
         Button(
             onClick = {
                 scope.launch {
@@ -322,25 +327,48 @@ fun NoteEditScreen(
                         content = content,
                         category = category
                     )
-                    if (inEditMode) viewModel.update(note)
-                    else viewModel.insertNoteWithTagsSuspend(note, selectedTags)
+                    if (inEditMode) {
+                        viewModel.update(note)
+                    } else {
+                        viewModel.insertNoteWithTagsSuspend(note, selectedTags)
+                    }
                     onNavigateBack()
                 }
             },
-            enabled = title.isNotBlank() && content.isNotBlank()
+            enabled = title.isNotBlank() && content.isNotBlank(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            shape = MaterialTheme.shapes.large,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFF6BCB77)
+            )
         ) {
             Text("Save")
         }
-        if(inEditMode) {
-            OutlinedButton(onClick = onNavigateBack, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
+
+        if (inEditMode) {
+            OutlinedButton(onClick = onNavigateBack, modifier = Modifier.fillMaxWidth()) {
+                Text("Cancel")
+            }
         }
     }
 }
 
+
 @Composable
 fun NoteCard(note: Note, modifier: Modifier = Modifier, tags: List<Tag> = emptyList()) {
+    val context = LocalContext.current
+
     Card(
-        modifier = modifier.fillMaxWidth().padding(8.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(8.dp)
+            .clickable {
+                val intent = Intent(context, EditNote::class.java)
+                intent.putExtra("noteId", note.id)
+                context.startActivity(intent)
+            },
         elevation = CardDefaults.cardElevation(4.dp)
     ) {
         Column(
@@ -367,26 +395,8 @@ fun NoteCard(note: Note, modifier: Modifier = Modifier, tags: List<Tag> = emptyL
             }
             Text(
                 text = note.title,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold
+                style = MaterialTheme.typography.titleMedium
             )
-            if (tags.isNotEmpty()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    tags.forEach { tag ->
-                        Surface(
-                            color = MaterialTheme.colorScheme.tertiaryContainer,
-                            shape = MaterialTheme.shapes.small
-                        ) {
-                            Text(
-                                text = tag.name,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer
-                            )
-                        }
-                    }
-                }
-            }
         }
     }
 }

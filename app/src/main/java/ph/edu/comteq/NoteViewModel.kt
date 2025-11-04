@@ -48,9 +48,10 @@ class NoteViewModel(application: Application): AndroidViewModel(application) { /
         return noteDao.getNoteById(id)
     }
 
-    suspend fun getNoteWithTags(noteId: Int): NoteWithTags? {
-        return noteDao.getNoteWithTags(noteId)
+    fun getNoteWithTags(noteId: Int): Flow<NoteWithTags?> {
+        return noteDao.getNoteWithTagsById(noteId)
     }
+
 
     fun insertTag(tag: Tag) = viewModelScope.launch {
         noteDao.insertTag(tag)
@@ -88,5 +89,22 @@ class NoteViewModel(application: Application): AndroidViewModel(application) { /
         noteDao.insertNoteWithTags(note, tags)
     }
 
-
+    fun updateNoteWithTags(note: Note, tags: List<Tag>) {
+        viewModelScope.launch {
+            noteDao.updateNote(note)
+            noteDao.clearTagsForNote(note.id)
+            tags.forEach { tag ->
+                noteDao.insertNoteTagCrossRef(NoteTagCrossRef(note.id, tag.id))
+            }
+        }
+    }
+    fun addTag(tagName: String) {
+        viewModelScope.launch {
+            val newTag = Tag(
+                id = 0, // auto-generated
+                name = tagName
+            )
+            noteDao.insertTag(newTag)
+        }
+    }
 }
